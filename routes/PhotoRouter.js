@@ -4,7 +4,7 @@ const User = require("../db/userModel");
 const router = express.Router();
 
 // API 3: /photosOfUser/:id → tất cả ảnh + comment của user đó
-router.get("/photosOfUser/:id", async (req, res) => {
+router.get("/:id", async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(400).json({ message: "Cannot find user" });

@@ -4,7 +4,7 @@ const Photo = require("../db/photoModel");
 const router = express.Router();
 const mongoose = require("mongoose");
 
-// API 1: /user/list → danh sách user cho sidebar
+// API 1: /users/list → danh sách user cho sidebar
 router.get("/list", async (req, res) => {
     try {
         const users = await User.find({})
@@ -16,7 +16,7 @@ router.get("/list", async (req, res) => {
     }
 });
 
-// API 2: /user/:id → chi tiết 1 user
+// API 2: /users/:id → chi tiết 1 user
 router.get("/:id", async (req, res) => {
     try {
         const user = await User.findById(req.params.id).select(
