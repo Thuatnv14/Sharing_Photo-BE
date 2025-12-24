@@ -3,6 +3,7 @@ const User = require("../db/userModel");
 const Photo = require("../db/photoModel");
 const router = express.Router();
 const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
 
 // API 1: /users/list → danh sách user cho sidebar
 router.get("/list", async (req, res) => {
@@ -32,76 +33,76 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.get("/admin/userlist", async (req, res) => {
-    try {
-        const users = await User.find({})
-            .select("_id first_name last_name")
-            .sort({ last_name: 1, first_name: 1 });
 
-        const result = await Promise.all(
-            users.map(async (user) => {
-                const userObj = user.toObject();
-                const photoCount = await Photo.countDocuments({ user_id: user._id });
-                const commentResult = await Photo.aggregate([
-                    { $unwind: "$comments" },
-                    {
-                        $match: {
+// Lấy tất cả comments do user này viết
+router.get('/:id/comments', async (req, res) => {
+    const { id } = req.params;
 
-                            "comments.user_id": new mongoose.Types.ObjectId(user._id),
-                        },
-                    },
-                    { $count: "total" },
-                ]);
-
-                const commentCount =
-                    commentResult.length > 0 ? commentResult[0].total : 0;
-
-                userObj.photo_count = photoCount;
-                userObj.comment_count = commentCount;
-
-                return userObj;
-            })
-        );
-
-        res.json(result);
-    } catch (error) {
-        console.error("Error /admin/userlist:", error);
-        res.status(500).json({ message: error.message });
-    }
-});
-// API 4: Lấy chi tiết comment của user
-router.get("/commentsOfUser/:id", async (req, res) => {
-    const id = req.params.id;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ message: "Invalid User ID" });
+    if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
     }
 
     try {
-        const comments = await Photo.aggregate([
-            { $unwind: "$comments" },
-            {
-                $match: {
-                    "comments.user_id": new mongoose.Types.ObjectId(id),
-                },
-            },
-            {
-                $project: {
-                    _id: 0,
-                    photo_id: "$_id",
-                    file_name: "$file_name",
-                    user_id: "$user_id",
-                    comment_id: "$comments._id",
-                    comment_text: "$comments.comment",
-                    date_time: "$comments.date_time",
-                },
-            },
-        ]);
+        const photos = await Photo.find({ 'comments.user_id': id })
+            .select('_id file_name user_id comments')
+            .lean();
 
-        res.json(comments);
-    } catch (error) {
-        console.error("Error in /commentsOfUser:", error);
-        res.status(500).json({ message: "Error fetching comments" });
+        const userComments = [];
+        for (const photo of photos) {
+            for (const comment of photo.comments || []) {
+                if (comment.user_id && comment.user_id.toString() === id) {
+                    userComments.push({
+                        _id: comment._id,
+                        comment: comment.comment,
+                        date_time: comment.date_time,
+                        photo_file_name: photo.file_name,
+                        photo_user_id: photo.user_id,
+                    });
+                }
+            }
+        }
+
+        res.json(userComments);
+    } catch (err) {
+        console.error('Error fetching user comments:', err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
+
+router.post("/", async (req, res) => {
+    const { login_name, password, first_name, last_name, location, description, occupation } = req.body;
+
+    if (!login_name || !password || !first_name || !last_name) {
+        return res.status(400).json({ message: "Required fields: login_name, password, first_name, last_name" });
+    }
+
+    try {
+        const existing = await User.findOne({ login_name });
+        if (existing) {
+            return res.status(400).json({ message: "login_name already exists" });
+        }
+
+        const user = new User({
+            login_name,
+            password, // Hash tự động nhờ pre-save
+            first_name,
+            last_name,
+            location: location || "",
+            description: description || "",
+            occupation: occupation || ""
+        });
+
+        await user.save();
+
+        res.status(201).json({
+            login_name: user.login_name,
+            _id: user._id,
+            first_name: user.first_name
+        });
+    } catch (err) {
+        console.error("Registration error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 module.exports = router;

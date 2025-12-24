@@ -24,12 +24,14 @@ async function dbLoad() {
     const userModels = models.userListModel();
     const mapFakeId2RealId = {};
     for (const user of userModels) {
-        userObj = new User({
+        const userObj = new User({
             first_name: user.first_name,
             last_name: user.last_name,
             location: user.location,
             description: user.description,
             occupation: user.occupation,
+            login_name: user.login_name || `${user.first_name.toLowerCase()}`,
+            password: "123456" // ← THÊM MẬT KHẨU TẠM
         });
         try {
             await userObj.save();
@@ -38,11 +40,13 @@ async function dbLoad() {
             console.log(
                 "Adding user:",
                 user.first_name + " " + user.last_name,
-                " with ID ",
+                " with login_name:",
+                userObj.login_name,
+                " and ID ",
                 user.objectID
             );
         } catch (error) {
-            console.error("Error create user", error);
+            console.error("Error creating user", error);
         }
     }
     const photoModels = [];
